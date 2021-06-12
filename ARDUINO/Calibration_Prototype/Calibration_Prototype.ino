@@ -1,4 +1,5 @@
 //This is the basic calibration function.
+//Current: V0.1: 1 - point (20.90%) air calibration. 
 //To Do: EEPROM read/write.
 
 #include <Adafruit_ADS1X15.h>
@@ -38,7 +39,6 @@ void counter_isr() {
 
 void pin_isr() {
 
-  pin_flag = 0; //reset the flag.
   Timer1.start(); //start the counter.
   Serial.println("Calibration Button pressed");
   Serial.println("Hold for 5 s to enter calibration");
@@ -100,7 +100,7 @@ void calibrationRoutine() {
   Serial.print("New value \t"); Serial.println(new_value, 4);
 
   //update new ADC voltage at 20.90 % air :
-  pts[1] = new_value;
+  //pts[1] = new_value;
   calibrated = true;
   //calculate the new parameters:
   solveEqn();
@@ -111,13 +111,14 @@ void calibrationRoutine() {
 void solveEqn() {
   calibrated = 0;
   if (calibrated) {
+    //if it has been calibrated, update the 2 points. 
     m_new =  (pts[3] - new_value) / (pts[2] - pts[0]) ; //slope is y2-y1/ x2-x1
-    c_new =  new_value - ((m_new) * pts[0]);
+    c_new =  new_value - ((m_new) * pts[0]); // intercept is y-mx
   }
 
   else {
     m =  (pts[3] - pts[1]) / (pts[2] - pts[0]) ; //slope m is y2-y1/ x2-x1
-    c =  pts[1] - (m) * pts[0]; // x= y-mx
+    c =  pts[1] - (m) * pts[0]; // intercept c = y-mx
     Serial.println(m, 4); Serial.println(c, 4);
   }
 }

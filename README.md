@@ -156,7 +156,7 @@ _These points were cross-checked using a commercial oxygen analyzer._ [link](htt
 - Data at intermittent values of oxygen purity was generated using [Pufferfish](https://www.pez-globo.org/) to compare the readings from the commercial oxygen analyzer and the calibration value obtained from the line equation
 
 <p align="left">
-<a href="#logo" name="Wiring"><img src="./IMAGES/Data.png" width="600"></a>
+<a href="#logo" name="Wiring"><img src="./IMAGES/Data2.png" width="600"></a>
 </p>
 
 <details>

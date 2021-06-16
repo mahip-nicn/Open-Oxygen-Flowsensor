@@ -1,5 +1,5 @@
 //This is the basic calibration function.
-//Current: V0.1: 1 - point (20.90%) air calibration. 
+//Current: V0.1: 1 - point (20.90%) air calibration. Tested OK June 16,2021. 
 //To Do: EEPROM read/write.
 
 #include <Adafruit_ADS1X15.h>
@@ -21,7 +21,7 @@ int16_t mv = 0; //equivalent milliVolts of the input.
 volatile unsigned int counter = 0;
 volatile bool pressed_flag = 0; //if calibration mode has to be started.
 volatile bool pin_flag = 0;
-bool calibrated = true;
+bool calibrated = false;
 //ADC object.
 Adafruit_ADS1115 ads;  /* Use this for the 16-bit version */
 
@@ -78,8 +78,7 @@ void loop () {
 
   else {
     float general_purity = (ads.getLastConversionResults() * RESOLUTION_MV - c) / m; // x= (y-c)/m
-    Serial.print("O2 Purity_CAL \t"); Serial.println(general_purity, 2);
-    delay(1000);
+    Serial.print("O2 Purity_GENERAL \t"); Serial.println(general_purity, 2);
   }
 
 }
@@ -109,7 +108,6 @@ void calibrationRoutine() {
 }
 
 void solveEqn() {
-  calibrated = 0;
   if (calibrated) {
     //if it has been calibrated, update the 2 points. 
     m_new =  (pts[3] - new_value) / (pts[2] - pts[0]) ; //slope is y2-y1/ x2-x1
@@ -122,5 +120,3 @@ void solveEqn() {
     Serial.println(m, 4); Serial.println(c, 4);
   }
 }
-
-

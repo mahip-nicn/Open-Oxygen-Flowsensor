@@ -1,14 +1,17 @@
 /*
- *This is the basic calibration function for the open-source oxygen purity analyzer with flow sensor.
- *Current: V0.1: 2-point factory calibration (21% and 100%) and 1-point on-field (20.90%) offset calibration
- *IMPORTANT: The voltage value for 100% pure oxygen has to be set in the pts[] array (factory calibration). 
- *This value may be different for every other sensor so must be calibrated with reference to a known oxygen purity(medical oxygen cylinders). 
- *
- */
+  This is the basic calibration function for the open-source oxygen purity analyzer with flow sensor.
+  Current: V0.1: 2-point factory calibration (21% and 100%) and 1-point on-field (20.90%) offset calibration
+  IMPORTANT: The voltage value for 100% pure oxygen has to be set in the pts[] array (factory calibration).
+  This value may be different for every other sensor so must be calibrated with reference to a known oxygen purity(medical oxygen cylinders).
+  Current: V0.2 Added LCD Display. 
+*/
 
 #include <Adafruit_ADS1X15.h>
 #include <TimerOne.h>
 #include <EEPROM.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
 #define CALIBRATION_PIN 2 // pin 2 has to be held for 5 seconds to enter calibration mode. 
 #define RESOLUTION_MV 0.1875 //resolution for FSR ~ 6.2V. TODO: FSR reduce to get more resoltion. Input voltage is <100mV from sensor. 
 //variables.
@@ -33,6 +36,7 @@ volatile bool pin_flag = 0;
 float airContainer = 0; //for holding the write value.
 bool calContainer = false; //to hold the previous calibration state
 Adafruit_ADS1115 ads;  /* Use this for the 16-bit version */
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 void counter_isr() {
 
@@ -57,6 +61,8 @@ void setup() {
 
   Serial.begin(9600);
   Timer1.initialize(500000); //500ms period
+  lcd.begin();
+  lcd.backlight();
   //Set the EEPROM and calibration points:
   EEPROM.get(calAddress, calContainer);
   delayMicroseconds(5);
@@ -80,8 +86,15 @@ void setup() {
   Timer1.attachInterrupt(counter_isr); // blinkLED to run every 0.15 seconds
   solveEqn(); //to get the initial values.
   //remove this for deployment
-//  delay(1000);
-
+  //  delay(1000);
+  lcd.setCursor(3, 0);
+  lcd.print("Starting");
+  lcd.setCursor(11, 0);
+  lcd.cursor();
+  lcd.blink();
+  delay(4000);
+  lcd.noBlink();
+  lcd.clear();
 }
 
 
@@ -99,26 +112,42 @@ void loop () {
     float calibrated_purity = (ads.getLastConversionResults() * RESOLUTION_MV - c_new) / m_new; // x= (y-c)/m
     //    Serial.println(ads.getLastConversionResults());
     Serial.print("O2 Purity_CAL \t"); Serial.println(calibrated_purity, 2);
+    lcd.setCursor(0, 0);
+
+    lcd.print("Purity:");
+    lcd.setCursor(7, 0);
+    lcd.print(calibrated_purity, 2);
   }
 
   else {
     float general_purity = (ads.getLastConversionResults() * RESOLUTION_MV - c) / m; // x= (y-c)/m
     Serial.print("O2 Purity_GENERAL \t"); Serial.println(general_purity, 2);
+
+    lcd.setCursor(0, 0);
+    lcd.print("Purity:");
+    lcd.setCursor(7, 0);
+    lcd.print(general_purity, 2);
   }
   //get the updated values:
   solveEqn();
-  //remove this for deployment
-//  delay(1000);
-//  Serial.println(airContainer);
-//  Serial.println(calContainer);
 }
-//  solveEqn(pts, &m, &c);
 
 
 void calibrationRoutine() {
+  lcd.clear();
   Serial.println("Starting Calibration routine...");
   Serial.println("Remove gasses from the sensor");
- 
+  lcd.setCursor(3, 0);
+  lcd.print("Calibrating");
+  lcd.setCursor(14, 0);
+  lcd.cursor();
+  lcd.blink();
+  lcd.setCursor(3, 1);
+  lcd.print("Remove Supply!");
+  delay(5000);
+  lcd.noBlink();
+  lcd.clear();
+
   //get new values:
   int16_t sum = 0;
   for (int i = 0; i < 10; i++) {
@@ -128,21 +157,28 @@ void calibrationRoutine() {
   }
   new_value = (sum / 10) * RESOLUTION_MV ;
   Serial.print("New value \t"); Serial.println(new_value, 4);
+
   EEPROM.put(airAddress, new_value);
   delayMicroseconds(5);
   EEPROM.get(airAddress, airContainer);
   delayMicroseconds(5);
   Serial.print("Written the new calibration value in EEPROM:\t"); Serial.println(airContainer);
-  delay(500);
+
   //update new ADC voltage at 20.90 % air :
-  pts[1] = new_value; //store this value. 
-  new_value=0; 
+  pts[1] = new_value; //store this value.
+  new_value = 0;
+
   if (!calContainer) {
     //of the previous value is not true,
     EEPROM.put(calAddress, true);
     calContainer = true; //set this for using it on the rest of the code .
   }
 
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Calibration OK!");
+  delay(3000);
+  lcd.clear();
   //calculate the new parameters:
   solveEqn();
 
@@ -153,7 +189,7 @@ void solveEqn() {
   //  for (int i = 0; i < 4; i++) {
   //    Serial.println(pts[i]);
   //  }
-  
+
   if (calContainer) {
     //if it has been calibrated, update the 2 points.
     m_new =  (pts[3] - pts[1]) / (pts[2] - pts[0]) ; //slope is y2-y1/ x2-x1

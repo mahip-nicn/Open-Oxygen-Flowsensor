@@ -11,7 +11,7 @@ float flow = 0;
 void setup() {
   // Serial:
 
-  Serial.begin(115200);
+  Serial.begin(9600);
   Wire.setClock(400000);
   Wire.begin();
   while (true) {
@@ -38,7 +38,6 @@ void setup() {
 
 void loop () {
 
-  int ret_flowSensor = flowSensor.read_sample();
   if (ret_flowSensor == 0){
         flow = flowSensor.get_flow();
         Serial.print("Flow \t"); Serial.println(flow);

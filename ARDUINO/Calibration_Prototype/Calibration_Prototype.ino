@@ -3,7 +3,8 @@
   Current: V0.1: 2-point factory calibration (21% and 100%) and 1-point on-field (20.90%) offset calibration
   IMPORTANT: The voltage value for 100% pure oxygen has to be set in the pts[] array (factory calibration).
   This value may be different for every other sensor so must be calibrated with reference to a known oxygen purity(medical oxygen cylinders).
-  Current: V0.2 Added LCD Display. 
+  Current: V0.2 Added LCD Display.
+  Current: V0.3 Added SFM3000 Flow Display.
 */
 
 #include <Adafruit_ADS1X15.h>
@@ -12,8 +13,13 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
+//SFM 3000
+#include <sfm3x00.h>
+
+//Defines:
 #define CALIBRATION_PIN 2 // pin 2 has to be held for 5 seconds to enter calibration mode. 
 #define RESOLUTION_MV 0.1875 //resolution for FSR ~ 6.2V. TODO: FSR reduce to get more resoltion. Input voltage is <100mV from sensor. 
+
 //variables.
 float m = 0;
 float c = 0;
@@ -29,12 +35,16 @@ int16_t mv = 0; //equivalent milliVolts of the input.
 volatile unsigned int counter = 0;
 volatile bool pressed_flag = 0; //if calibration mode has to be started.
 volatile bool pin_flag = 0;
+float flow = 0;
 //ADC object.
 //EEPROM Values:
 #define  airAddress  0 //always write to 21% air's value address.
 #define  calAddress 10 //always write calibration on 11th address, far from air EEPROM data. 
 float airContainer = 0; //for holding the write value.
 bool calContainer = false; //to hold the previous calibration state
+int ret_flowSensor = 0;
+
+SFM3000 flowSensor;
 Adafruit_ADS1115 ads;  /* Use this for the 16-bit version */
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -60,6 +70,8 @@ void pin_isr() {
 void setup() {
 
   Serial.begin(9600);
+  Wire.setClock(400000);
+  Wire.begin();
   Timer1.initialize(500000); //500ms period
   lcd.begin();
   lcd.backlight();
@@ -75,11 +87,35 @@ void setup() {
     //retreive the saved value.
     pts[1] = airContainer;
   }
+  /////////////SFM 3000////////////////
+  while (true) {
+    int ret_flowSensor = flowSensor.init();
+    //Check if SFM has been initialized or not.
+    if (!ret_flowSensor) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("FLOW SENSOR OK");
+      delay(2500);
+      Serial.println("Init complete!");
+      break;
+    }
+    else {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("NO FLOW SENSOR");
+      delay(2000);
+      Serial.println("Unable to init Flow Sensor");
+      Serial.println(ret_flowSensor);
+    }
+
+  }
 
   // age array is passed to calculateSum()
   ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
   ads.begin();
   ads.startComparator_SingleEnded(0, 1000);
+  flowSensor.get_scale_offset();
+  flowSensor.start_continuous();
   //Calibration
   pinMode (CALIBRATION_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(CALIBRATION_PIN), pin_isr, FALLING); // ext hardware interrupt (LOW)
@@ -87,6 +123,7 @@ void setup() {
   solveEqn(); //to get the initial values.
   //remove this for deployment
   //  delay(1000);
+  lcd.clear();
   lcd.setCursor(3, 0);
   lcd.print("Starting");
   lcd.setCursor(11, 0);
@@ -100,6 +137,23 @@ void setup() {
 
 void loop () {
 
+  if (flowSensor.read_sample() == 0) {
+    lcd.setCursor(0, 1);
+    lcd.print("Flow:");
+    lcd.setCursor(5, 1);
+    int16_t sum_f = 0;
+    for (int i = 0; i < 100; i++) {
+      int16_t flow_value = flowSensor.get_flow();
+      sum_f += flow_value;
+      delayMicroseconds(20);
+    }
+    flow = (sum_f / 100);
+
+    Serial.print("Flow \t"); Serial.println(flow);
+    lcd.print(flow, 2);
+    lcd.setCursor(10,1);
+    lcd.print ("lpm");
+  }
 
   if (pressed_flag) {
     //means to enter calibraiton mode;
@@ -117,6 +171,8 @@ void loop () {
     lcd.print("Purity:");
     lcd.setCursor(7, 0);
     lcd.print(calibrated_purity, 2);
+    lcd.setCursor(13, 0);
+    lcd.print ("%");
   }
 
   else {
@@ -127,9 +183,12 @@ void loop () {
     lcd.print("Purity:");
     lcd.setCursor(7, 0);
     lcd.print(general_purity, 2);
+    lcd.setCursor(13, 0);
+    lcd.print ("%");
   }
   //get the updated values:
   solveEqn();
+  delay(400);
 }
 
 
